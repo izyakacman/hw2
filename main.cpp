@@ -1,10 +1,10 @@
 ﻿#include <iostream>
 #include <cstring>
 
+using namespace std;
+
 #include "my_allocator.h"
 #include "my_vector.h"
-
-using namespace std;
 
 /**
 	Менеджер памяти
