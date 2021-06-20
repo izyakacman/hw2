@@ -11,4 +11,4 @@ struct MemoryPool
 	size_t size; // размер занятого пространства блока в байтах
 	size_t count; // количество объектов в блоке
 
-} memory_pool;
+} memory_pool{ nullptr, nullptr, 0, 0, 0 };
