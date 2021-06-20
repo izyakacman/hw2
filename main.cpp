@@ -1,15 +1,11 @@
 ﻿#include <iostream>
 #include <cstring>
+#include <map>
 
 using namespace std;
 
 #include "my_allocator.h"
 #include "my_vector.h"
-
-/**
-	Менеджер памяти
-*/
-map<char*, MemoryBlock> g_memory_map;
 
 /**
 	Вычисление факториала числа n

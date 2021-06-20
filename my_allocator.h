@@ -1,6 +1,6 @@
 #pragma once
 
-#include "memory_map.h"
+#include "memory_pool.h"
 
 /**
 	Реализация аллокатора на основе менеджера памяти g_memory_map
@@ -32,20 +32,20 @@ struct MyAllocator {
 	T* allocate(std::size_t n)
 	{
 		T* return_p = nullptr;
+		MemoryPool* ptr = &memory_pool;
 
-		for (const auto& pair : g_memory_map) // есть ли место в существующих блоках памяти
+		while( ptr ) // есть ли место в существующих блоках памяти
 		{
-			auto block_info = pair.second;
-
-			if (n * sizeof(T) > block_info.m_space - block_info.m_size) // недостаточно места
+			if (n * sizeof(T) > ptr->space - ptr->size) // недостаточно места
+			{
+				ptr = ptr->next_block;
 				continue;
+			}
 
-			return_p = reinterpret_cast<T*>(pair.first + block_info.m_size);
+			return_p = reinterpret_cast<T*>(ptr->ptr + ptr->size);
 
-			block_info.m_size += n * sizeof(T);
-			++block_info.m_count;
-
-			g_memory_map[pair.first] = block_info;
+			ptr->size += n * sizeof(T);
+			++ptr->count;
 
 			break;
 		}
@@ -64,30 +64,30 @@ struct MyAllocator {
 	*/
 	void deallocate(T* p, std::size_t)
 	{
-		for (const auto& pair : g_memory_map)
-		{
-			auto block_info = pair.second;
+		MemoryPool* ptr = &memory_pool;
 
+		while( ptr )
+		{
 			// Объект находится в одном из блоков памяти?
 
-			if (reinterpret_cast<char*>(p) >= pair.first &&
-				reinterpret_cast<char*>(p) < (pair.first + block_info.m_space))
+			if (reinterpret_cast<char*>(p) >= ptr->ptr &&
+				reinterpret_cast<char*>(p) < (ptr->ptr + ptr->space))
 			{
-				--block_info.m_count;
+				--ptr->count;
 
-				if (block_info.m_count == 0) // последний объект - освобождаем память
+				if (ptr->count == 0) // последний объект - освобождаем память
 				{
-					free(pair.first);
-					g_memory_map.erase(pair.first);
-				}
-				else
-				{
-					g_memory_map[pair.first] = block_info;
+					free(ptr->ptr);
+					if (ptr != &memory_pool)
+						free(ptr);
 				}
 
 				break;
 			}
-		}
+
+			ptr = ptr->next_block;
+
+		} // while(ptr)
 	}
 
 	/**
@@ -121,10 +121,24 @@ private:
 
 		if (size_bytes > space_bytes) space_bytes = size_bytes;
 
-		void* p = malloc(space_bytes);
-		if (!p)	throw std::bad_alloc();
+		MemoryPool* ptr = &memory_pool;
 
-		g_memory_map[static_cast<char*>(p)] = { space_bytes, size_bytes, 1 };
+		while (ptr->next_block)
+		{
+			ptr = ptr->next_block;
+		}
+
+		void* p = malloc(space_bytes);
+		if (!p) throw std::bad_alloc();
+
+		ptr->next_block = static_cast<MemoryPool*>(malloc(sizeof(MemoryPool)));
+		if (!ptr->next_block) throw std::bad_alloc();
+
+		ptr->next_block->ptr = static_cast<char*>(p);
+		ptr->next_block->space = space_bytes;
+		ptr->next_block->size = size_bytes;
+		ptr->next_block->count = 1;
+		ptr->next_block->next_block = nullptr;
 
 		return static_cast<T*>(p);
 	}
